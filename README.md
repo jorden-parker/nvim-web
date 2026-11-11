@@ -11,20 +11,55 @@ adds pull request review inside the editor.
 curl -fsSL https://raw.githubusercontent.com/jorden-parker/nvim-web/main/install.sh | bash
 ```
 
-The script replaces `~/.config/nvim`. Before it does, it moves your existing
-config to `~/.config/nvim.backup-<date>-<time>`. Nothing is deleted.
+The installer replaces `~/.config/nvim` with this config. Before it does, it
+moves your current config to `~/.config/nvim.backup-<date>-<time>`, for example
+`~/.config/nvim.backup-20261111-130653`. Nothing is deleted.
 
 Then start `nvim`. Plugins are already installed; language servers, formatters
 and syntax parsers install themselves in the background on the first launch.
 Run `:Mason` to watch them.
 
-To also start with clean plugin data (it is moved to backups too, not deleted):
+### Install from a clone
+
+If you have cloned the repository, run the installer from its root:
 
 ```sh
+git clone https://github.com/jorden-parker/nvim-web.git
+cd nvim-web
+bash install.sh
+```
+
+This does the same as the `curl` command: it backs up your current config, then
+installs the latest version from GitHub into `~/.config/nvim`. It does not link
+or copy your clone.
+
+To install the commits in your clone instead, for example to try your own
+changes, point the installer at it:
+
+```sh
+NVIM_WEB_REPOSITORY="file://$PWD" bash install.sh
+```
+
+Only committed changes are installed.
+
+### Options
+
+| Option | What it does |
+| --- | --- |
+| `--fresh` | Also moves Neovim's plugin data, state and cache to backups, so everything installs from scratch |
+| `--help` | Shows the usage text and exits |
+
+```sh
+bash install.sh --fresh
 curl -fsSL https://raw.githubusercontent.com/jorden-parker/nvim-web/main/install.sh | bash -s -- --fresh
 ```
 
-To go back to your old config:
+If `XDG_CONFIG_HOME` is set, the installer uses `$XDG_CONFIG_HOME/nvim` in
+place of `~/.config/nvim`.
+
+### Go back
+
+To restore your old config:
 
 ```sh
 rm -rf ~/.config/nvim
