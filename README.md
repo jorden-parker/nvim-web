@@ -91,7 +91,7 @@ On macOS: `brew install neovim node tree-sitter-cli ripgrep fd gh lazygit`.
 | Markdown | `marksman`, `markdownlint-cli2`, in-buffer rendering, browser preview |
 | Other linters and formatters | ESLint, Prettier and Biome, used only in projects configured for them |
 | Syntax parsers | TypeScript, TSX, JavaScript, JSDoc, HTML, CSS, SCSS, JSON, JSON5, YAML, TOML, Markdown, GraphQL and more |
-| Git and GitHub | gitsigns, lazygit, Octo, Diffview |
+| Git and GitHub | gitsigns with diff colours in the file, lazygit, Octo, Diffview |
 | AI | Claude Code |
 
 Mason installs every tool. A project's own `node_modules/.bin/oxlint` and
@@ -203,6 +203,59 @@ These are Octo's own keys.
 LazyVim's Octo keys work too: `<leader>gp` lists pull requests and
 `<leader>gi` lists issues.
 
+### Diff colours in the file
+
+A file you have changed shows its diff where you edit it, with the colours of
+a diff view. Added lines and changed lines get the diff background, and inside
+a changed line the words that differ stand out. The comparison is against the
+Git index, so the colours go away when you stage or commit the change.
+
+| Key | Action |
+| --- | --- |
+| `<leader>uH` | Hide or show the diff colours |
+| `<leader>ghp` | Show the old text of the change under the cursor |
+| `<leader>ghr` | Undo the change under the cursor |
+
+Deleted lines are marked in the sign column only. A line that changes
+together with added or removed lines gets the line colour without the word
+highlight.
+
+## Types on hover
+
+`K` shows the language server's hover text and, under it, the declaration of
+the symbol's type and what sort of type it is.
+
+```text
+const visitor: Visitor
+──────────────────────────────────────
+interface Visitor — src/visitor.ts:1
+interface Visitor {
+  name: string
+  visits: number
+}
+```
+
+The label is one of interface, class, abstract class, enum, function,
+namespace, type parameter, object literal, or type alias. A type alias also
+says what it names: union, intersection, object, function, tuple, array,
+literal and so on, for example `type alias · union`.
+
+| Case | What `K` shows |
+| --- | --- |
+| A value, parameter or property | Hover text, then the declaration of its type |
+| A type name | Hover text, then its declaration with the label |
+| A primitive such as `number` | Hover text only |
+| A type with several declarations | The first three, then a count of the rest |
+
+Declarations longer than 30 lines are cut off. Press `K` again to move into
+the window and scroll, and `gy` to jump to the type.
+
+A type alias of a union or primitive is found through the type annotation of
+the symbol. When the type is inferred instead, `K` shows the hover text only.
+
+This works in TypeScript, JavaScript, TSX and JSX. Other languages keep the
+normal hover.
+
 ## Claude Code
 
 [claudecode.nvim](https://github.com/coder/claudecode.nvim) runs the `claude`
@@ -253,7 +306,7 @@ searches all keys.
 | Key | Action |
 | --- | --- |
 | `gd` / `gr` | Go to definition / references |
-| `K` | Show documentation |
+| `K` | Show documentation and the type's declaration |
 | `<leader>cr` | Rename symbol |
 | `<leader>ca` | Code action |
 | `<leader>cf` | Format |
@@ -303,7 +356,11 @@ lua/plugins/oxc.lua                 oxlint and oxfmt
 lua/plugins/web.lua                 HTML, CSS, Emmet, extra parsers
 lua/plugins/pull-request-review.lua Octo and Diffview
 lua/plugins/diagnostics.lua         how problems are displayed
+lua/plugins/type-hover.lua          maps K to hover with the type's declaration
+lua/plugins/diff-highlights.lua     diff colours in changed files
 lua/project_tooling.lua             picks the formatter and oxlint root per project
+lua/type_hover.lua                  builds the hover text and finds the type's declaration
+lua/diff_highlights.lua             paints added and changed lines
 ```
 
 ## Tests
@@ -315,8 +372,9 @@ tests/run.sh
 The tests start a real Neovim with this config in an isolated folder
 (`.test-environment/`), so they never touch `~/.config/nvim`. They check that
 the config starts without errors, that plugins and tools install, that oxlint
-and oxfmt work on a sample project, that the keys are mapped, that the Claude
-Code plugin loads, and that the install script backs up before it replaces.
+and oxfmt work on a sample project, that the keys are mapped, that hover shows
+type declarations, that changed lines are coloured, that the Claude Code
+plugin loads, and that the install script backs up before it replaces.
 The first run downloads everything and takes a few minutes.
 
 ## Licence

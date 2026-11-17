@@ -101,6 +101,70 @@ local everyday_normal_mode_keys = {
 
 local everyday_insert_mode_keys = { "jj", "jk" }
 
+local line_backgrounds_source = [[
+  local line_number_away_from_inspected_lines = 1
+  vim.fn.cursor(line_number_away_from_inspected_lines, 1)
+  vim.cmd("redraw!")
+  local function read_background_after_end_of_line(line_number)
+    local end_of_line = vim.fn.screenpos(0, line_number, vim.fn.col({ line_number, "$" }))
+    return vim.fn.screenattr(end_of_line.row, end_of_line.col + 5)
+  end
+  local unchanged = read_background_after_end_of_line(3)
+  local changed = read_background_after_end_of_line(4)
+  local added = read_background_after_end_of_line(10)
+  return {
+    is_changed_line_highlighted = changed ~= unchanged,
+    is_added_line_highlighted = added ~= unchanged,
+    is_added_line_distinct_from_changed_line = added ~= changed,
+  }
+]]
+
+local every_line_background_is_highlighted = {
+  is_changed_line_highlighted = true,
+  is_added_line_highlighted = true,
+  is_added_line_distinct_from_changed_line = true,
+}
+
+local no_line_background_is_highlighted = {
+  is_changed_line_highlighted = false,
+  is_added_line_highlighted = false,
+  is_added_line_distinct_from_changed_line = false,
+}
+
+local function wait_until_line_backgrounds_are(editor, description, expected_backgrounds, timeout_milliseconds)
+  editor.wait_until(
+    description,
+    "return vim.deep_equal((function() " .. line_backgrounds_source .. " end)(), ...)",
+    timeout_milliseconds,
+    expected_backgrounds
+  )
+end
+
+local is_changed_word_highlighted_source = [[
+  vim.cmd("redraw!")
+  local changed_line_number = 4
+  local changed_column = vim.fn.getline(changed_line_number):find("4", 1, true)
+  local changed_cell = vim.fn.screenpos(0, changed_line_number, changed_column)
+  local unchanged_cell = vim.fn.screenpos(0, changed_line_number, changed_column - 1)
+  return vim.fn.screenattr(changed_cell.row, changed_cell.col) ~= vim.fn.screenattr(unchanged_cell.row, unchanged_cell.col)
+]]
+
+local hover_window_text_source = [[
+  for _, window in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if vim.api.nvim_win_get_config(window).relative ~= "" and vim.w[window].type_hover then
+      return table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(window), 0, -1, false), "\n")
+    end
+  end
+  return ""
+]]
+
+local language_server_answers_hover_source = [[
+  local client = vim.lsp.get_clients({ bufnr = 0, name = "vtsls" })[1]
+  local params = vim.lsp.util.make_position_params(0, client.offset_encoding)
+  local response = client:request_sync("textDocument/hover", params, 2000, 0)
+  return response ~= nil and response.result ~= nil
+]]
+
 local has_key_mapping_source = [[
   local mode, key = ...
   local expanded_key = key:gsub("<leader>", vim.g.mapleader)
@@ -109,6 +173,7 @@ local has_key_mapping_source = [[
 
 local visible_problems_source = [[
   local message_from_test_terminal_without_emulator = "E1568"
+  local notification_from_hiding_diff_highlights = "Disabled **Diff Highlights**"
   local problems = {}
   for _, message_line in ipairs(vim.split(vim.fn.execute("messages"), "\n", { trimempty = true })) do
     local is_error_message = message_line:match("^E%d+:") ~= nil or message_line:lower():find("error", 1, true) ~= nil
@@ -117,7 +182,8 @@ local visible_problems_source = [[
     end
   end
   for _, notification in ipairs(Snacks.notifier.get_history()) do
-    if notification.level == "error" or notification.level == "warn" then
+    local is_problem = notification.level == "error" or notification.level == "warn"
+    if is_problem and notification.msg ~= notification_from_hiding_diff_highlights then
       table.insert(problems, notification.msg)
     end
   end
@@ -414,6 +480,123 @@ checks.check("a Biome project is formatted with biome only", function()
   checks.expect_equal(
     list_formatter_names_for(editor, fixtures_directory .. "/biome-project/src/example.ts"),
     { "biome-check" }
+  )
+end)
+
+local function hover_over(symbol_name)
+  editor.type_keys("<Esc>")
+  editor.evaluate([[vim.fn.cursor(1, 1); vim.fn.search("const " .. ... .. "\\zs")]], symbol_name)
+  editor.type_keys("hK")
+  editor.wait_until(
+    "the hover window opens over " .. symbol_name,
+    "return (" .. "function() " .. hover_window_text_source .. " end)():find(..., 1, true) ~= nil",
+    language_server_timeout_milliseconds,
+    symbol_name
+  )
+  return editor.evaluate(hover_window_text_source)
+end
+
+local function expect_text_to_contain(text, expected_fragments)
+  for _, expected_fragment in ipairs(expected_fragments) do
+    if not text:find(expected_fragment, 1, true) then
+      error("expected " .. vim.inspect(text) .. " to contain " .. vim.inspect(expected_fragment), 2)
+    end
+  end
+end
+
+checks.check("K shows the interface behind a value, labelled as an interface", function()
+  editor.open_file(oxc_project .. "/src/hover-target.ts")
+  editor.wait_until("vtsls attaches", has_attached_client_source, language_server_timeout_milliseconds, "vtsls")
+  editor.evaluate([[vim.fn.search("const visitor\\zs")]])
+  editor.type_keys("h")
+  editor.wait_until(
+    "vtsls answers hover requests",
+    language_server_answers_hover_source,
+    language_server_timeout_milliseconds
+  )
+  expect_text_to_contain(hover_over("visitor"), {
+    "const visitor: Visitor",
+    "**interface** `Visitor` — src/hover-target.ts:1",
+    "interface Visitor {",
+    "  visits: number",
+  })
+end)
+
+checks.check("K shows a type alias, labelled with the shape of the type it names", function()
+  expect_text_to_contain(hover_over("greeting"), {
+    "**type alias · union** `Greeting` — src/hover-target.ts:6",
+    "type Greeting = 'hello' | 'welcome back'",
+  })
+end)
+
+checks.check("K on a type name says what sort of type it is", function()
+  editor.evaluate([[vim.fn.cursor(1, 1); vim.fn.search("greeting: \\zsGreeting")]])
+  editor.type_keys("K")
+  editor.wait_until(
+    "the hover window opens over the type name",
+    "return (" .. "function() " .. hover_window_text_source .. " end)():find(..., 1, true) ~= nil",
+    language_server_timeout_milliseconds,
+    "**type alias · union** `Greeting`"
+  )
+end)
+
+checks.check("K shows a declaration from the TypeScript library", function()
+  expect_text_to_contain(hover_over("pageTitle"), { "**interface** `Document`", "interface Document extends" })
+end)
+
+checks.check("K shows plain hover text for a value of a primitive type", function()
+  local hover_text = hover_over("visitCount")
+  expect_text_to_contain(hover_text, { "const visitCount: number" })
+  checks.expect_equal(hover_text:find("---", 1, true), nil)
+end)
+
+checks.check("changed and added lines are highlighted like a diff view", function()
+  editor.type_keys("<Esc>")
+  editor.open_file(oxc_project .. "/tsconfig.json")
+  checks.expect_equal(editor.evaluate(line_backgrounds_source), no_line_background_is_highlighted)
+  editor.evaluate([[
+    vim.api.nvim_buf_set_lines(0, 3, 4, false, { '    "target": "ES2024",' })
+    vim.api.nvim_buf_set_lines(0, 9, 9, false, { '  "exclude": ["dist"]' })
+  ]])
+  wait_until_line_backgrounds_are(
+    editor,
+    "the changed and the added line are highlighted",
+    every_line_background_is_highlighted,
+    edit_timeout_milliseconds
+  )
+end)
+
+checks.check("the changed words inside a changed line are highlighted", function()
+  editor.wait_until("the changed character stands out", is_changed_word_highlighted_source, edit_timeout_milliseconds)
+end)
+
+checks.check("<leader>uH hides and shows the diff highlights", function()
+  checks.expect_equal(editor.evaluate(has_key_mapping_source, "n", "<leader>uH"), true)
+  editor.type_keys("<Space>uH")
+  wait_until_line_backgrounds_are(
+    editor,
+    "the line highlights are gone",
+    no_line_background_is_highlighted,
+    edit_timeout_milliseconds
+  )
+  checks.expect_equal(editor.evaluate(is_changed_word_highlighted_source), false)
+  editor.type_keys("<Space>uH")
+  wait_until_line_backgrounds_are(
+    editor,
+    "the line highlights are back",
+    every_line_background_is_highlighted,
+    edit_timeout_milliseconds
+  )
+  editor.wait_until("the changed character stands out", is_changed_word_highlighted_source, edit_timeout_milliseconds)
+end)
+
+checks.check("the diff highlights follow the buffer when a change is undone", function()
+  editor.evaluate([[vim.cmd("edit!")]])
+  wait_until_line_backgrounds_are(
+    editor,
+    "the line highlights are gone",
+    no_line_background_is_highlighted,
+    edit_timeout_milliseconds
   )
 end)
 
