@@ -3,7 +3,8 @@
 A Neovim config for front-end work, built on [LazyVim](https://www.lazyvim.org).
 It sets up TypeScript, HTML, CSS, JSON, YAML and Markdown tooling, uses
 [Oxc](https://oxc.rs) (`oxlint` and `oxfmt`) for linting and formatting, and
-adds pull request review inside the editor.
+adds pull request review and [Claude Code](https://claude.com/claude-code)
+inside the editor.
 
 ## Install
 
@@ -75,6 +76,7 @@ mv ~/.config/nvim.backup-<date>-<time> ~/.config/nvim
 | `tree-sitter` CLI and a C compiler | Build syntax parsers |
 | [ripgrep](https://github.com/BurntSushi/ripgrep), [fd](https://github.com/sharkdp/fd) | Search and file finding |
 | [GitHub CLI](https://cli.github.com) (`gh auth login`) | Pull request review |
+| [Claude Code](https://claude.com/claude-code) CLI (`claude`) | Claude Code window |
 | [lazygit](https://github.com/jesseduffield/lazygit), a [Nerd Font](https://www.nerdfonts.com) | Git window and icons |
 
 On macOS: `brew install neovim node tree-sitter-cli ripgrep fd gh lazygit`.
@@ -90,6 +92,7 @@ On macOS: `brew install neovim node tree-sitter-cli ripgrep fd gh lazygit`.
 | Other linters and formatters | ESLint, Prettier and Biome, used only in projects configured for them |
 | Syntax parsers | TypeScript, TSX, JavaScript, JSDoc, HTML, CSS, SCSS, JSON, JSON5, YAML, TOML, Markdown, GraphQL and more |
 | Git and GitHub | gitsigns, lazygit, Octo, Diffview |
+| AI | Claude Code |
 
 Mason installs every tool. A project's own `node_modules/.bin/oxlint` and
 `node_modules/.bin/oxfmt` are used when they exist, so the editor matches the
@@ -200,6 +203,24 @@ These are Octo's own keys.
 LazyVim's Octo keys work too: `<leader>gp` lists pull requests and
 `<leader>gi` lists issues.
 
+## Claude Code
+
+[claudecode.nvim](https://github.com/coder/claudecode.nvim) runs the `claude`
+CLI in a window beside your code and connects it to the editor, so Claude sees
+the file and selection you are working on and shows its edits as diffs you
+accept or deny. It is LazyVim's `ai.claudecode` extra, with LazyVim's keys.
+
+| Key | Action |
+| --- | --- |
+| `<leader>ac` | Show or hide Claude |
+| `<leader>af` | Focus the Claude window |
+| `<leader>ar` | Resume an earlier conversation |
+| `<leader>aC` | Continue the last conversation |
+| `<leader>ab` | Add the current file to the conversation |
+| `<leader>as` (visual) | Send the selection to Claude |
+| `<leader>aa` | Accept the diff Claude proposes |
+| `<leader>ad` | Deny the diff |
+
 ## Everyday keys
 
 Press `<Space>` and wait: a menu shows every key that can follow. `<leader>sk`
@@ -276,7 +297,7 @@ Layout:
 
 ```text
 init.lua                            entry point
-lazyvim.json                        enabled LazyVim extras
+lazyvim.json                        enabled LazyVim extras, including Claude Code
 lua/config/                         options, keys, plugin manager bootstrap
 lua/plugins/oxc.lua                 oxlint and oxfmt
 lua/plugins/web.lua                 HTML, CSS, Emmet, extra parsers
@@ -294,9 +315,9 @@ tests/run.sh
 The tests start a real Neovim with this config in an isolated folder
 (`.test-environment/`), so they never touch `~/.config/nvim`. They check that
 the config starts without errors, that plugins and tools install, that oxlint
-and oxfmt work on a sample project, that the keys are mapped, and that the
-install script backs up before it replaces. The first run downloads everything
-and takes a few minutes.
+and oxfmt work on a sample project, that the keys are mapped, that the Claude
+Code plugin loads, and that the install script backs up before it replaces.
+The first run downloads everything and takes a few minutes.
 
 ## Licence
 

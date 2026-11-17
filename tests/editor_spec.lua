@@ -54,6 +54,7 @@ local expected_plugins = {
   "octo.nvim",
   "diffview.nvim",
   "gitsigns.nvim",
+  "claudecode.nvim",
 }
 
 local pull_request_review_keys = {
@@ -78,6 +79,18 @@ local pull_request_review_keys = {
   "<leader>gp",
   "<leader>gP",
 }
+
+local claude_code_normal_mode_keys = {
+  "<leader>ac",
+  "<leader>af",
+  "<leader>ar",
+  "<leader>aC",
+  "<leader>ab",
+  "<leader>aa",
+  "<leader>ad",
+}
+
+local claude_code_visual_mode_keys = { "<leader>as" }
 
 local everyday_normal_mode_keys = {
   "<leader>fy",
@@ -239,6 +252,15 @@ checks.check("the pull request review keys are mapped", function()
   end
 end)
 
+checks.check("the Claude Code keys are mapped", function()
+  for _, key in ipairs(claude_code_normal_mode_keys) do
+    checks.expect_equal({ key, editor.evaluate(has_key_mapping_source, "n", key) }, { key, true })
+  end
+  for _, key in ipairs(claude_code_visual_mode_keys) do
+    checks.expect_equal({ key, editor.evaluate(has_key_mapping_source, "x", key) }, { key, true })
+  end
+end)
+
 checks.check("the everyday keys are mapped", function()
   for _, key in ipairs(everyday_normal_mode_keys) do
     checks.expect_equal({ key, editor.evaluate(has_key_mapping_source, "n", key) }, { key, true })
@@ -293,6 +315,15 @@ checks.check("the review plugins load without errors", function()
   editor.evaluate([[require("lazy").load({ plugins = { "octo.nvim", "diffview.nvim" } })]])
   checks.expect_equal(
     editor.evaluate([[return vim.fn.exists(":Octo") == 2 and vim.fn.exists(":DiffviewOpen") == 2]]),
+    true
+  )
+  checks.expect_equal(editor.evaluate(visible_problems_source), {})
+end)
+
+checks.check("the Claude Code plugin loads without errors", function()
+  editor.evaluate([[require("lazy").load({ plugins = { "claudecode.nvim" } })]])
+  checks.expect_equal(
+    editor.evaluate([[return vim.fn.exists(":ClaudeCode") == 2 and vim.fn.exists(":ClaudeCodeDiffAccept") == 2]]),
     true
   )
   checks.expect_equal(editor.evaluate(visible_problems_source), {})
