@@ -27,6 +27,7 @@ local expected_mason_packages = {
   "tailwindcss-language-server",
   "marksman",
   "markdownlint-cli2",
+  "js-debug-adapter",
 }
 
 local expected_treesitter_parsers = {
@@ -55,6 +56,8 @@ local expected_plugins = {
   "diffview.nvim",
   "gitsigns.nvim",
   "claudecode.nvim",
+  "nvim-dap",
+  "nvim-dap-ui",
 }
 
 local pull_request_review_keys = {
@@ -100,6 +103,59 @@ local everyday_normal_mode_keys = {
 }
 
 local everyday_insert_mode_keys = { "jj", "jk" }
+
+local debugging_keys = {
+  "<leader>db",
+  "<leader>dB",
+  "<leader>dx",
+  "<leader>dc",
+  "<leader>dC",
+  "<leader>dO",
+  "<leader>di",
+  "<leader>do",
+  "<leader>dt",
+  "<leader>du",
+  "<leader>de",
+}
+
+local breakpoint_lines_source = [[
+  local breakpoint_lines = {}
+  local breakpoints_in_buffer = require("dap.breakpoints").get()[vim.api.nvim_get_current_buf()] or {}
+  for _, breakpoint in ipairs(breakpoints_in_buffer) do
+    table.insert(breakpoint_lines, breakpoint.line)
+  end
+  table.sort(breakpoint_lines)
+  return breakpoint_lines
+]]
+
+local function build_breakpoint_lines_check_source(expected_lines)
+  return "return vim.deep_equal((function() "
+    .. breakpoint_lines_source
+    .. " end)(), "
+    .. vim.inspect(expected_lines)
+    .. ")"
+end
+
+local is_stopped_on_second_line_source = [[
+  local session = require("dap").session()
+  local stopped_frame = session and session.current_frame
+  return stopped_frame ~= nil and stopped_frame.line == 2
+]]
+
+local has_no_debug_session_source = [[
+  return require("dap").session() == nil
+]]
+
+local write_debug_target_source = [[
+  local debug_target_path = vim.fn.stdpath("cache") .. "/debug-target.js"
+  vim.fn.mkdir(vim.fn.stdpath("cache"), "p")
+  vim.fn.writefile({
+    'const greeting = "hello";',
+    "const shout = greeting.toUpperCase();",
+    "process.stdout.write(shout);",
+  }, debug_target_path)
+  return debug_target_path
+]]
 
 local line_backgrounds_source = [[
   local line_number_away_from_inspected_lines = 1
@@ -333,6 +389,12 @@ checks.check("the everyday keys are mapped", function()
   end
   for _, key in ipairs(everyday_insert_mode_keys) do
     checks.expect_equal({ key, editor.evaluate(has_key_mapping_source, "i", key) }, { key, true })
+  end
+end)
+
+checks.check("the debugging keys are mapped", function()
+  for _, key in ipairs(debugging_keys) do
+    checks.expect_equal({ key, editor.evaluate(has_key_mapping_source, "n", key) }, { key, true })
   end
 end)
 
@@ -615,6 +677,60 @@ checks.check("the HTML, CSS and JSON language servers attach", function()
       server_name
     )
   end
+end)
+
+checks.check("the debugger can run JavaScript and TypeScript in Node and Chrome", function()
+  checks.expect_equal(
+    editor.evaluate([[
+      local dap = require("dap")
+      return {
+        dap.adapters["pwa-node"] ~= nil,
+        dap.adapters["pwa-chrome"] ~= nil,
+        dap.configurations.typescript[1].name,
+        dap.configurations.typescriptreact[1].name,
+        dap.configurations.javascript[1].name,
+      }
+    ]]),
+    { true, true, "Launch file", "Launch file", "Launch file" }
+  )
+end)
+
+checks.check("<leader>db adds a breakpoint on the current line and removes it again", function()
+  editor.open_file(editor.evaluate(write_debug_target_source))
+  editor.evaluate([[vim.fn.cursor(2, 1)]])
+  editor.type_keys("<Space>db")
+  editor.wait_until("the breakpoint is added", build_breakpoint_lines_check_source({ 2 }), edit_timeout_milliseconds)
+  editor.type_keys("<Space>db")
+  editor.wait_until("the breakpoint is removed", build_breakpoint_lines_check_source({}), edit_timeout_milliseconds)
+end)
+
+checks.check("<leader>dx clears every breakpoint", function()
+  editor.type_keys("<Space>db")
+  editor.wait_until("the first breakpoint is added", build_breakpoint_lines_check_source({ 2 }), edit_timeout_milliseconds)
+  editor.evaluate([[vim.fn.cursor(3, 1)]])
+  editor.type_keys("<Space>db")
+  editor.wait_until("both breakpoints are added", build_breakpoint_lines_check_source({ 2, 3 }), edit_timeout_milliseconds)
+  editor.type_keys("<Space>dx")
+  editor.wait_until("the breakpoints are cleared", build_breakpoint_lines_check_source({}), edit_timeout_milliseconds)
+end)
+
+checks.check("a debug session stops on a breakpoint", function()
+  editor.evaluate([[vim.fn.cursor(2, 1)]])
+  editor.type_keys("<Space>db")
+  editor.wait_until("the breakpoint is added", build_breakpoint_lines_check_source({ 2 }), edit_timeout_milliseconds)
+  editor.evaluate([[
+    local dap = require("dap")
+    dap.run(dap.configurations.javascript[1])
+  ]])
+  editor.wait_until(
+    "the session stops on the breakpoint",
+    is_stopped_on_second_line_source,
+    language_server_timeout_milliseconds
+  )
+  editor.evaluate([[require("dap").terminate()]])
+  editor.wait_until("the session ends", has_no_debug_session_source, edit_timeout_milliseconds)
+  editor.type_keys("<Space>dx")
+  editor.wait_until("the breakpoints are cleared", build_breakpoint_lines_check_source({}), edit_timeout_milliseconds)
 end)
 
 checks.check("no errors or warnings were shown during the session", function()

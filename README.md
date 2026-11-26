@@ -92,6 +92,7 @@ On macOS: `brew install neovim node tree-sitter-cli ripgrep fd gh lazygit`.
 | Other linters and formatters | ESLint, Prettier and Biome, used only in projects configured for them |
 | Syntax parsers | TypeScript, TSX, JavaScript, JSDoc, HTML, CSS, SCSS, JSON, JSON5, YAML, TOML, Markdown, GraphQL and more |
 | Git and GitHub | gitsigns with diff colours in the file, lazygit, Octo, Diffview |
+| Debugging | nvim-dap with `js-debug-adapter` for JavaScript and TypeScript |
 | AI | Claude Code |
 
 Mason installs every tool. A project's own `node_modules/.bin/oxlint` and
@@ -256,6 +257,48 @@ the symbol. When the type is inferred instead, `K` shows the hover text only.
 This works in TypeScript, JavaScript, TSX and JSX. Other languages keep the
 normal hover.
 
+## Debugging
+
+Breakpoints and step debugging for JavaScript and TypeScript, using nvim-dap
+with `js-debug-adapter`, the debugger VS Code uses. Mason installs the adapter
+on the first launch. It needs Node.js.
+
+### Breakpoints
+
+| Key | Action |
+| --- | --- |
+| `<leader>db` | Add a breakpoint on the current line, or remove the one already there |
+| `<leader>dB` | Add a breakpoint that only stops when a condition you type is true |
+| `<leader>dx` | Clear every breakpoint in every file |
+
+### Run and step
+
+| Key | Action |
+| --- | --- |
+| `<leader>dc` | Start a session, or continue to the next breakpoint |
+| `<leader>dO` | Step over |
+| `<leader>di` | Step into |
+| `<leader>do` | Step out |
+| `<leader>dC` | Run to the cursor |
+| `<leader>dt` | Stop the session |
+| `<leader>du` | Show or hide the debugger windows |
+| `<leader>de` | Evaluate the expression under the cursor |
+
+### Debug a file
+
+1. Open the file and press `<leader>db` on the line to stop at.
+2. Press `<leader>dc` and pick **Launch file**.
+3. The debugger windows open and the line is highlighted when the breakpoint
+   is hit. Step with the keys above, then `<leader>dt` to stop.
+
+- JavaScript files run in Node.
+- TypeScript files run with `tsx`, or with `ts-node` when `tsx` is not on your
+  `PATH`. Install one, for example `npm install -g tsx`.
+- **Attach** in the same menu joins a Node process started with `node --inspect`.
+- Browser code and dev servers need a `.vscode/launch.json` in the project.
+  `<leader>dc` lists its entries next to the built-in ones, and the `pwa-chrome`
+  and `pwa-msedge` types are set up.
+
 ## Claude Code
 
 [claudecode.nvim](https://github.com/coder/claudecode.nvim) runs the `claude`
@@ -289,6 +332,7 @@ searches all keys.
 | `<leader>fj` | Open the nearest `package.json` |
 | `<leader>cw` | Replace the word under the cursor everywhere in the file |
 | `<leader>cx` / `<leader>cX` | Apply safe / all oxlint fixes in the file |
+| `<leader>dx` | Clear every breakpoint in every file |
 
 ### Files and search
 
